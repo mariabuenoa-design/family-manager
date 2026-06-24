@@ -379,4 +379,6 @@ async function handleAIUpdate(parsed, sender, chat) {
 console.log('🚀 Starting Family Care Agent...');
 console.log('   Waiting for QR code...\n');
 client.initialize();
-qrcode.generate(qr, { small: true });
+  qrcode.generate(qr, { small: true });
+    console.log('\nOr open this URL to scan:\nhttps://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' +
+  encodeURIComponent(qr));
