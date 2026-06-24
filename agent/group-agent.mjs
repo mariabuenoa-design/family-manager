@@ -93,7 +93,7 @@ client.on('message_create', async (msg) => {
   console.log(`[${chat.name}] ${sender}: ${msg.body}`);
 
   // Command: status / update / how are we doing
-  if (body === '/status' || body === 'status' || body.includes('how are we doing')) {
+  if (body === '/status' || body === 'status' || body.includes('how are we doing') || body.includes('resumen') || body.includes('summary') || body.includes('como vamos') || body.includes('como estamos')) {
     const digest = await buildDigest();
     await chat.sendMessage(digest);
     return;
