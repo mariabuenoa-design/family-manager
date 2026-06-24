@@ -129,6 +129,45 @@ client.on('message_create', async (msg) => {
     return;
   }
 
+  // Command: catchup - process last 2 weeks of messages from the group
+  if (body === '/catchup' || body === 'catchup') {
+    await chat.sendMessage('Processing last 2 weeks of messages... This may take a minute.');
+    try {
+      const messages = await chat.fetchMessages({ limit: 200 });
+      const twoWeeksAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
+      const recentMsgs = messages.filter(m => m.timestamp * 1000 > twoWeeksAgo && m.body && m.body.length > 5 && !m.fromMe);
+      
+      let processed = 0;
+      let actionable = 0;
+      
+      for (const m of recentMsgs) {
+        const contact = await m.getContact();
+        const senderName = contact.pushname || contact.name || 'Unknown';
+        const parsed = await parseMessage(m.body, senderName);
+        if (parsed.actionable) {
+          await writeFirebase('agent_updates', {
+            ...parsed,
+            sender: senderName,
+            originalMessage: m.body,
+            timestamp: new Date(m.timestamp * 1000).toISOString(),
+            source: 'catchup'
+          });
+          actionable++;
+        }
+        processed++;
+        // Small delay to avoid rate limits
+        await new Promise(r => setTimeout(r, 500));
+      }
+      
+      await chat.sendMessage('Catchup complete! Processed ' + processed + ' messages, found ' + actionable + ' actionable updates.');
+    } catch (err) {
+      console.error('Catchup error:', err.message);
+      await chat.sendMessage('Error during catchup: ' + err.message);
+    }
+    return;
+  }
+
+
   // Command: update — parse natural language input
   if (body.startsWith('update ') || body.startsWith('/update ')) {
     const info = msg.body.replace(/^\/?(update)\s+/i, '');
