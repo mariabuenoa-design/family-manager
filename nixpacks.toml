@@ -1,8 +1,14 @@
 [phases.setup]
-aptPkgs = ["chromium", "libnss3", "libatk1.0-0", "libatk-bridge2.0-0", "libcups2", "libdrm2", "libxkbcommon0", "libxcomposite1", "libxdamage1", "libxfixes3", "libxrandr2", "libgbm1", "libpango-1.0-0", "libcairo2", "libasound2"]
+  aptPkgs = ["chromium", "libglib2.0-0", "libnss3", "libatk1.0-0", "libatk-bridge2.0-0", "libcups2", "libdrm2",
+  "libxkbcommon0", "libxcomposite1", "libxdamage1", "libxfixes3", "libxrandr2", "libgbm1", "libpango-1.0-0",
+  "libcairo2", "libasound2", "libdbus-1-3", "libx11-xcb1", "libxcursor1", "libgtk-3-0", "libxss1", "libxtst6"]
 
-[phases.install]
-cmds = ["npm ci"]
+  [phases.install]
+  cmds = ["npm ci"]
 
-[start]
-cmd = "node agent/group-agent.mjs"
+  [environment]
+  PUPPETEER_SKIP_DOWNLOAD = "true"
+  PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium"
+
+  [start]
+  cmd = "node agent/group-agent.mjs"
