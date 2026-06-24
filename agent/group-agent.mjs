@@ -73,15 +73,8 @@ client.on('message_create', async (msg) => {
     if (!overlap) return;
   }
 
-  // Ignore messages from the agent itself (prevent loops)
-  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('📋')) return;
-  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('✅')) return;
-  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('🚨')) return;
-  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('📅')) return;
-  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('🤖')) return;
-  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('⚠️')) return;
-  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('❌')) return;
-  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('📲')) return;
+  // Ignore ALL messages from the agent itself (prevent loops)
+  if (msg.fromMe) return;
 
   const contact = await msg.getContact();
   const sender = contact.pushname || contact.name || msg.from;
