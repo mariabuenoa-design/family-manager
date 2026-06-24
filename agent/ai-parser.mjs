@@ -30,11 +30,18 @@ If it does have actionable info, return:
 
 IMPORTANT:
 - Messages can be in Spanish or English
+- BE GENEROUS with actionable: true. When in doubt, mark it actionable.
+- ANY mention of a doctor, appointment, medical visit, health concern, or care task = actionable
 - "Ya fuimos" = "we already went" = appointment_attended
 - "Se movió para" = "moved to" = appointment_rescheduled
+- "necesita ir" / "tiene que ir" / "hay que llevarla" = appointment_scheduled (use tomorrow/next date mentioned)
 - Casual mentions of doctors by last name ARE actionable
+- Doctors NOT in the list above are still actionable (new doctors exist!) - use type "general_update"
 - Short confirmations like "listo" or "done" in response context are actionable
+- Messages about medications, symptoms, lab results, insurance, pharmacy = actionable as "health_update"
+- Questions about care ("cuando es la cita?", "quien la lleva?") = actionable as "general_update" with a helpful summary_es answer
 - If you can infer the next visit from frequency (q3m = 3 months, q6m = 6 months, yearly = 12 months), calculate it from today
+- ONLY return actionable:false for messages completely unrelated to parents' care (jokes, greetings, off-topic chat)
 - Today's date: ${new Date().toISOString().split('T')[0]}`;
 
 export async function parseMessage(messageText, senderName) {
