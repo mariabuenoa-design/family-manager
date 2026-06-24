@@ -379,3 +379,4 @@ async function handleAIUpdate(parsed, sender, chat) {
 console.log('🚀 Starting Family Care Agent...');
 console.log('   Waiting for QR code...\n');
 client.initialize();
+qrcode.generate(qr, { small: true });
