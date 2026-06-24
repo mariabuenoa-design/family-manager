@@ -192,11 +192,15 @@ client.on('message_create', async (msg) => {
 
   // AI-powered natural language parsing — understands Spanish and English
   if (msg.body.length > 5) {
+    console.log('  Sending to AI parser...');
     const parsed = await parseMessage(msg.body, sender);
+    console.log('  AI result:', JSON.stringify(parsed));
     if (parsed.actionable) {
       await handleAIUpdate(parsed, sender, chat);
-      return;
+    } else {
+      console.log('  Not actionable, no reply sent');
     }
+    return;
   }
 });
 
