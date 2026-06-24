@@ -359,61 +359,61 @@ async function sendParentReminder(parent, message, sender, chat) {
 }
 
 async function handleAIUpdate(parsed, sender, chat) {
-  console.log(`  🧠 AI parsed:`, JSON.stringify(parsed, null, 2));
+  console.log('  AI parsed:', JSON.stringify(parsed, null, 2));
 
-  // Update Firebase based on type
-  if (parsed.doctor && (parsed.type === 'appointment_attended' || parsed.type === 'appointment_scheduled' || parsed.type === 'appointment_rescheduled')) {
-    // Find and update the doctor record
-    const res = await fetch(`${FIREBASE_URL}/medical/doctors.json`);
-    const doctors = await res.json();
+  // Always reply first so the group sees confirmation
+  try {
+    if (parsed.summary_es) {
+      await chat.sendMessage(parsed.summary_es);
+      console.log('  Reply sent to group');
+    }
+  } catch (replyErr) {
+    console.error('  Failed to send reply:', replyErr.message);
+  }
 
-    if (doctors) {
-      for (const [key, doc] of Object.entries(doctors)) {
-        if (doc.doctor && doc.doctor.toLowerCase() === parsed.doctor.toLowerCase()) {
-          const updates = {};
-
-          if (parsed.type === 'appointment_attended') {
-            updates.lastVisit = parsed.date || new Date().toISOString().split('T')[0];
-            updates.lastVisitNote = `Attended - confirmed by ${sender}`;
-            if (parsed.next_visit_date) {
-              updates.nextVisit = parsed.next_visit_date;
+  // Then try to update Firebase
+  try {
+    if (parsed.doctor && (parsed.type === 'appointment_attended' || parsed.type === 'appointment_scheduled' || parsed.type === 'appointment_rescheduled')) {
+      const res = await fetch(`${FIREBASE_URL}/medical/doctors.json`);
+      const doctors = await res.json();
+      if (doctors) {
+        for (const [key, doc] of Object.entries(doctors)) {
+          if (doc.doctor && doc.doctor.toLowerCase() === parsed.doctor.toLowerCase()) {
+            const updates = {};
+            if (parsed.type === 'appointment_attended') {
+              updates.lastVisit = parsed.date || new Date().toISOString().split('T')[0];
+              updates.lastVisitNote = 'Attended - confirmed by ' + sender;
+              if (parsed.next_visit_date) updates.nextVisit = parsed.next_visit_date;
+            } else {
+              if (parsed.next_visit_date || parsed.date) updates.nextVisit = parsed.next_visit_date || parsed.date;
             }
-          } else if (parsed.type === 'appointment_scheduled' || parsed.type === 'appointment_rescheduled') {
-            if (parsed.next_visit_date || parsed.date) {
-              updates.nextVisit = parsed.next_visit_date || parsed.date;
+            if (Object.keys(updates).length > 0) {
+              await fetch(`${FIREBASE_URL}/medical/doctors/${key}.json`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+              });
             }
+            break;
           }
-
-          if (Object.keys(updates).length > 0) {
-            await fetch(`${FIREBASE_URL}/medical/doctors/${key}.json`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updates)
-            });
-          }
-          break;
         }
       }
     }
-  }
-
-  // Log the update
-  await writeFirebase('agent_updates', {
-    type: parsed.type,
-    parent: parsed.parent,
-    doctor: parsed.doctor,
-    date: parsed.date,
-    sender: sender,
-    summary: parsed.summary_en,
-    timestamp: new Date().toISOString(),
-    raw: parsed
-  });
-
-  // Respond in the group in Spanish
-  if (parsed.summary_es) {
-    await chat.sendMessage(`✅ ${parsed.summary_es}`);
+    await writeFirebase('agent_updates', {
+      type: parsed.type,
+      parent: parsed.parent,
+      doctor: parsed.doctor,
+      date: parsed.date,
+      sender: sender,
+      summary: parsed.summary_en,
+      timestamp: new Date().toISOString(),
+      raw: parsed
+    });
+  } catch (fbErr) {
+    console.error('  Firebase error (non-fatal):', fbErr.message);
   }
 }
+
 
 // Start the agent
 console.log('🚀 Starting Family Care Agent...');
