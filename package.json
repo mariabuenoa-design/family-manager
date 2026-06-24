@@ -1,0 +1,17 @@
+{
+  "name": "family-manager",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "upload-data": "node scripts/upload-data.mjs",
+    "test-whatsapp": "node scripts/test-whatsapp.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
+    "dotenv": "^17.4.2",
+    "firebase-admin": "^12.0.0",
+    "qrcode-terminal": "^0.12.0",
+    "twilio": "^5.0.0",
+    "whatsapp-web.js": "^1.34.7"
+  }
+}
