@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bueno Family Manager</title>
-    <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#1a2332">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👨‍👩‍👧‍👧</text></svg>">
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
     <style>
@@ -16,6 +14,7 @@
             --navy: #1a2332; --orange: #ff8c00; --green: #22c55e;
             --yellow: #eab308; --red: #ef4444; --grey: #64748b;
             --light: #f8fafc; --white: #fff; --border: #e2e8f0;
+            --teal: #0d9488; --blue: #3b82f6;
         }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--light); color: var(--navy); min-height: 100vh; }
 
@@ -25,20 +24,47 @@
         .user-select { display: flex; gap: 6px; }
         .user-btn { background: rgba(255,255,255,0.12); color: #fff; border: 2px solid transparent; padding: 5px 10px; border-radius: 16px; font-size: 11px; cursor: pointer; transition: 0.2s; }
         .user-btn.active { border-color: var(--orange); background: rgba(255,140,0,0.2); }
+        .user-greeting { color: var(--orange); font-size: 11px; margin-top: 2px; text-align: right; }
 
-        .main { max-width: 800px; margin: 0 auto; padding: 16px 12px; }
+        .main { max-width: 900px; margin: 0 auto; padding: 16px 12px; }
 
-        .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+        .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
         .stat { background: var(--white); border-radius: 10px; padding: 14px; text-align: center; border: 1px solid var(--border); }
         .stat .num { font-size: 28px; font-weight: 700; }
         .stat .lbl { font-size: 10px; color: var(--grey); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
         .stat.r .num { color: var(--red); }
         .stat.y .num { color: var(--yellow); }
         .stat.g .num { color: var(--green); }
+        .stat.b .num { color: var(--blue); }
 
         .card { background: var(--white); border-radius: 10px; border: 1px solid var(--border); margin-bottom: 12px; overflow: hidden; }
         .card-head { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
         .card-head .badge { font-size: 11px; background: var(--light); padding: 2px 8px; border-radius: 8px; color: var(--grey); }
+
+        .section-title { font-size: 13px; font-weight: 700; color: var(--grey); text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 8px; padding-left: 4px; }
+
+        .doctor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; padding: 12px 16px; }
+        .doctor-card { background: var(--light); border-radius: 8px; padding: 12px; border-left: 3px solid var(--teal); }
+        .doctor-card.overdue { border-left-color: var(--red); }
+        .doctor-card.upcoming { border-left-color: var(--yellow); }
+        .doctor-card .doc-name { font-size: 13px; font-weight: 600; color: var(--navy); }
+        .doctor-card .doc-meta { font-size: 11px; color: var(--grey); margin-top: 3px; }
+        .doctor-card .doc-dates { font-size: 11px; margin-top: 6px; display: flex; gap: 12px; }
+        .doctor-card .doc-dates span { display: flex; flex-direction: column; }
+        .doctor-card .doc-dates .label { font-size: 9px; color: var(--grey); text-transform: uppercase; }
+        .doctor-card .doc-dates .value { font-weight: 500; color: var(--navy); }
+        .doctor-card .doc-owner { font-size: 10px; color: var(--orange); margin-top: 4px; font-weight: 500; }
+
+        .update-item { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+        .update-item:last-child { border-bottom: none; }
+        .update-item .update-type { font-size: 10px; font-weight: 600; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px; }
+        .update-item .update-type.attended { background: #dcfce7; color: #166534; }
+        .update-item .update-type.scheduled { background: #dbeafe; color: #1d4ed8; }
+        .update-item .update-type.rescheduled { background: #fef3c7; color: #92400e; }
+        .update-item .update-type.health { background: #fce7f3; color: #be185d; }
+        .update-item .update-type.general { background: #f3e8ff; color: #7c3aed; }
+        .update-item .update-summary { font-size: 13px; color: var(--navy); }
+        .update-item .update-meta { font-size: 11px; color: var(--grey); margin-top: 3px; }
 
         .task { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 10px; }
         .task:last-child { border-bottom: none; }
@@ -56,10 +82,8 @@
 
         .task-actions { display: flex; gap: 4px; flex-shrink: 0; }
         .btn { padding: 5px 10px; border-radius: 6px; font-size: 10px; font-weight: 500; border: none; cursor: pointer; }
-        .btn-claim { background: #dbeafe; color: #1d4ed8; }
         .btn-done { background: #dcfce7; color: #166534; }
-        .btn-claim:hover { background: #bfdbfe; } .btn-done:hover { background: #bbf7d0; }
-        .claimed { font-size: 10px; color: var(--orange); font-weight: 500; }
+        .btn-done:hover { background: #bbf7d0; }
         .completed .task-title { text-decoration: line-through; opacity: 0.5; }
 
         .add-bar { padding: 10px 16px; background: var(--light); display: flex; gap: 6px; flex-wrap: wrap; }
@@ -67,41 +91,25 @@
         .add-bar select { padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
         .add-bar button { background: var(--orange); color: white; border: none; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; }
 
-        .activity { padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--grey); }
-        .activity:last-child { border-bottom: none; }
-        .activity strong { color: var(--navy); }
-        .activity .time { font-size: 10px; color: #94a3b8; }
-
         .tabs { display: flex; gap: 2px; padding: 0 16px; background: var(--white); border-bottom: 1px solid var(--border); overflow-x: auto; }
         .tab { padding: 10px 12px; font-size: 12px; font-weight: 500; color: var(--grey); border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
         .tab.active { color: var(--orange); border-bottom-color: var(--orange); }
 
-        .offline-banner { display: none; background: var(--red); color: white; text-align: center; padding: 6px; font-size: 11px; }
-        .offline-banner.show { display: block; }
+        .empty-state { padding: 30px; text-align: center; color: #94a3b8; font-size: 13px; }
 
-        .btn-text { background: #fef3c7; color: #92400e; }
-        .btn-text:hover { background: #fde68a; }
+        .nav-tabs { display: flex; gap: 0; margin-bottom: 16px; background: var(--white); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
+        .nav-tab { flex: 1; padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--grey); cursor: pointer; border-right: 1px solid var(--border); transition: 0.2s; }
+        .nav-tab:last-child { border-right: none; }
+        .nav-tab.active { background: var(--navy); color: var(--white); }
+        .nav-tab:hover:not(.active) { background: var(--light); }
 
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
-        .modal-overlay.show { display: flex; }
-        .modal { background: white; border-radius: 12px; padding: 24px; max-width: 400px; width: 90%; max-height: 80vh; overflow-y: auto; }
-        .modal h3 { font-size: 16px; margin-bottom: 12px; color: var(--navy); }
-        .modal input, .modal textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; margin-bottom: 10px; font-family: inherit; }
-        .modal textarea { height: 80px; resize: vertical; }
-        .modal .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
-        .modal .btn-send { background: var(--orange); color: white; padding: 8px 16px; border-radius: 6px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; }
-        .modal .btn-cancel { background: var(--light); color: var(--grey); padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); font-size: 13px; cursor: pointer; }
-        .modal .btn-send:hover { background: #e07b00; }
-        .modal .success-msg { background: #dcfce7; color: #166534; padding: 10px; border-radius: 6px; text-align: center; font-size: 13px; display: none; }
+        .view { display: none; }
+        .view.active { display: block; }
 
-        .user-greeting { color: var(--orange); font-size: 11px; margin-top: 2px; text-align: right; }
-
-        @media(max-width:500px) { .summary { grid-template-columns: repeat(3,1fr); } .task-actions { flex-direction: column; } .user-select { gap: 4px; } }
+        @media(max-width:500px) { .summary { grid-template-columns: repeat(2,1fr); } .doctor-grid { grid-template-columns: 1fr; } .nav-tabs { flex-wrap: wrap; } .nav-tab { min-width: 50%; } }
     </style>
 </head>
 <body>
-
-<div class="offline-banner" id="offline">You're offline — changes will sync when connected</div>
 
 <div class="header">
     <h1><span>●</span> Family Manager</h1>
@@ -111,57 +119,73 @@
     </div>
 </div>
 
-<!-- Text Message Modal -->
-<div class="modal-overlay" id="text-modal">
-    <div class="modal">
-        <h3>📲 Send Text Reminder</h3>
-        <label style="font-size:12px;color:var(--grey);margin-bottom:4px;display:block;">To:</label>
-        <select id="text-to" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;margin-bottom:10px;">
-            <option value="mom">Mom</option>
-            <option value="dad">Dad</option>
-            <option value="all-sisters">All Sisters</option>
-            <option value="nini">Nini</option>
-            <option value="isabel">Isabel</option>
-            <option value="elena">Elena</option>
-            <option value="marla">Marla</option>
-        </select>
-        <label style="font-size:12px;color:var(--grey);margin-bottom:4px;display:block;">Message:</label>
-        <textarea id="text-msg" placeholder="Type your reminder message..."></textarea>
-        <div class="success-msg" id="text-success">✓ Text sent successfully!</div>
-        <div class="modal-btns">
-            <button class="btn-cancel" onclick="closeTextModal()">Cancel</button>
-            <button class="btn-send" onclick="sendText()">Send Text</button>
-        </div>
-    </div>
-</div>
-
 <div class="main">
-    <div class="summary">
-        <div class="stat r"><div class="num" id="s-overdue">0</div><div class="lbl">Overdue</div></div>
-        <div class="stat y"><div class="num" id="s-upcoming">0</div><div class="lbl">Due Soon</div></div>
-        <div class="stat g"><div class="num" id="s-done">0</div><div class="lbl">Done</div></div>
+    <!-- Navigation -->
+    <div class="nav-tabs">
+        <div class="nav-tab active" data-view="overview">Overview</div>
+        <div class="nav-tab" data-view="doctors">Doctors</div>
+        <div class="nav-tab" data-view="tasks">Tasks</div>
+        <div class="nav-tab" data-view="feed">Agent Feed</div>
     </div>
 
-    <div class="card">
-        <div class="tabs" id="tabs">
-            <div class="tab active" data-tab="all">All</div>
-            <div class="tab" data-tab="mine">My Tasks</div>
-            <div class="tab" data-tab="overdue">Overdue</div>
-            <div class="tab" data-tab="mom">Mom</div>
-            <div class="tab" data-tab="dad">Dad</div>
-            <div class="tab" data-tab="done">Done</div>
+    <!-- OVERVIEW VIEW -->
+    <div class="view active" id="view-overview">
+        <div class="summary">
+            <div class="stat r"><div class="num" id="s-overdue">0</div><div class="lbl">Overdue</div></div>
+            <div class="stat y"><div class="num" id="s-upcoming">0</div><div class="lbl">Due Soon</div></div>
+            <div class="stat g"><div class="num" id="s-done">0</div><div class="lbl">Done</div></div>
+            <div class="stat b"><div class="num" id="s-updates">0</div><div class="lbl">Agent Updates</div></div>
         </div>
-        <div id="task-list"></div>
-        <div class="add-bar">
-            <input type="text" id="new-task" placeholder="Add new item...">
-            <select id="new-who"><option value="mom">Mom</option><option value="dad">Dad</option><option value="both">Both</option></select>
-            <button onclick="addTask()">+ Add</button>
+
+        <div class="section-title">Upcoming Appointments</div>
+        <div class="card">
+            <div id="upcoming-appts"></div>
+        </div>
+
+        <div class="section-title">Recent Agent Activity</div>
+        <div class="card">
+            <div id="recent-updates"></div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-head">Recent Activity <span class="badge" id="activity-count">0</span></div>
-        <div id="activity-list"></div>
+    <!-- DOCTORS VIEW -->
+    <div class="view" id="view-doctors">
+        <div class="section-title">Mom's Doctors</div>
+        <div class="card">
+            <div class="doctor-grid" id="mom-doctors"></div>
+        </div>
+
+        <div class="section-title">Dad's Doctors</div>
+        <div class="card">
+            <div class="doctor-grid" id="dad-doctors"></div>
+        </div>
+    </div>
+
+    <!-- TASKS VIEW -->
+    <div class="view" id="view-tasks">
+        <div class="card">
+            <div class="tabs" id="tabs">
+                <div class="tab active" data-tab="all">All</div>
+                <div class="tab" data-tab="mine">My Tasks</div>
+                <div class="tab" data-tab="overdue">Overdue</div>
+                <div class="tab" data-tab="mom">Mom</div>
+                <div class="tab" data-tab="dad">Dad</div>
+            </div>
+            <div id="task-list"></div>
+            <div class="add-bar">
+                <input type="text" id="new-task" placeholder="Add new item...">
+                <select id="new-who"><option value="mom">Mom</option><option value="dad">Dad</option><option value="both">Both</option></select>
+                <button onclick="addTask()">+ Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AGENT FEED VIEW -->
+    <div class="view" id="view-feed">
+        <div class="card">
+            <div class="card-head">WhatsApp Agent Feed <span class="badge" id="feed-count">0</span></div>
+            <div id="feed-list"></div>
+        </div>
     </div>
 </div>
 
@@ -179,12 +203,11 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// Family members
 const FAMILY = ['Maria', 'Nini', 'Isabel', 'Elena', 'Marla'];
 let currentUser = localStorage.getItem('fm-user') || 'Maria';
 let currentTab = 'all';
 
-// Initialize user buttons
+// User buttons
 function renderUserBtns() {
     const cont = document.getElementById('user-btns');
     cont.innerHTML = FAMILY.map(name =>
@@ -192,158 +215,163 @@ function renderUserBtns() {
     ).join('');
     document.getElementById('user-greeting').textContent = `Logged in as ${currentUser}`;
 }
-
 function setUser(name) {
     currentUser = name;
     localStorage.setItem('fm-user', name);
     renderUserBtns();
-    alert(`✓ You're now logged in as ${name}`);
 }
 
-// Text modal
-let textTaskTitle = '';
-function openTextModal(taskTitle) {
-    textTaskTitle = taskTitle;
-    document.getElementById('text-msg').value = `Reminder: ${taskTitle}`;
-    document.getElementById('text-modal').classList.add('show');
-    document.getElementById('text-success').style.display = 'none';
-}
-function closeTextModal() {
-    document.getElementById('text-modal').classList.remove('show');
-}
-function sendText() {
-    const to = document.getElementById('text-to').value;
-    const msg = document.getElementById('text-msg').value;
-    // Log the text intent to Firebase (will connect to Twilio later)
-    db.ref('texts').push({
-        to: to,
-        message: msg,
-        sentBy: currentUser,
-        task: textTaskTitle,
-        time: Date.now(),
-        status: 'queued'
-    });
-    addActivity(`${currentUser} sent text to ${to}: "${textTaskTitle}"`);
-    document.getElementById('text-success').style.display = 'block';
-    setTimeout(() => { closeTextModal(); }, 1500);
+// Navigation
+document.querySelector('.nav-tabs').addEventListener('click', e => {
+    if (e.target.classList.contains('nav-tab')) {
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        e.target.classList.add('active');
+        document.getElementById('view-' + e.target.dataset.view).classList.add('active');
+    }
+});
+
+// Render doctors
+function renderDoctors(snapshot) {
+    const doctors = [];
+    snapshot.forEach(child => doctors.push({ id: child.key, ...child.val() }));
+
+    const momDocs = doctors.filter(d => d.parent === 'mama' || d.parent === 'mom');
+    const dadDocs = doctors.filter(d => d.parent === 'papa' || d.parent === 'dad');
+
+    document.getElementById('mom-doctors').innerHTML = momDocs.length ?
+        momDocs.map(d => renderDoctorCard(d)).join('') :
+        '<div class="empty-state">No doctors tracked yet</div>';
+
+    document.getElementById('dad-doctors').innerHTML = dadDocs.length ?
+        dadDocs.map(d => renderDoctorCard(d)).join('') :
+        '<div class="empty-state">No doctors tracked yet</div>';
+
+    // Upcoming appointments for overview
+    const upcoming = doctors.filter(d => d.nextVisit).sort((a, b) => new Date(a.nextVisit) - new Date(b.nextVisit)).slice(0, 5);
+    document.getElementById('upcoming-appts').innerHTML = upcoming.length ?
+        upcoming.map(d => {
+            const days = daysUntil(d.nextVisit);
+            const urgency = days < 0 ? 'red' : days < 7 ? 'yellow' : 'green';
+            const label = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Today' : `in ${days}d`;
+            return `<div class="task"><div class="dot ${urgency}"></div><div class="task-body"><div class="task-title">${d.doctor} — ${d.parent}</div><div class="task-meta">${d.nextVisit} (${label})</div></div></div>`;
+        }).join('') :
+        '<div class="empty-state">No upcoming appointments</div>';
+
+    // Stats
+    const overdue = doctors.filter(d => d.nextVisit && daysUntil(d.nextVisit) < 0).length;
+    const soon = doctors.filter(d => d.nextVisit && daysUntil(d.nextVisit) >= 0 && daysUntil(d.nextVisit) <= 14).length;
+    document.getElementById('s-overdue').textContent = overdue;
+    document.getElementById('s-upcoming').textContent = soon;
 }
 
-// Load initial data or seed
-function seedData() {
-    const tasks = [
-        { title: "Mom — Derm (Lifschitz) needs appt", who: "mom", responsible: "Elena", urgency: "red", action: "Schedule yearly skin check", created: Date.now() },
-        { title: "Dad — BCC face needs Mohs surgery", who: "dad", responsible: "Elena", urgency: "red", action: "Dr Fayne suggests Dr Lara Kelly", created: Date.now() },
-        { title: "Dad — Cardio (Sagar) needs yearly appt", who: "dad", responsible: "Maria", urgency: "red", action: "Last visit Jan 2025 — overdue", created: Date.now() },
-        { title: "Mom — Psych for ADHD — waiting on neuro rec", who: "mom", responsible: "Elena", urgency: "yellow", action: "Follow up on emessage", created: Date.now() },
-        { title: "Mom — GI (Subhani) — when next visit?", who: "mom", responsible: "Elena", urgency: "yellow", action: "Reached out, pending", created: Date.now() },
-        { title: "Mom — Infusion center closer to mall", who: "mom", responsible: "Marla", urgency: "yellow", action: "Research options", created: Date.now() },
-        { title: "Dad — Ophtho (Camejo) frequency?", who: "dad", responsible: "Nini", urgency: "yellow", action: "Reached out, pending", created: Date.now() },
-        { title: "Dad — Atorvastatin on hold, needs statin", who: "dad", responsible: "Isabel", urgency: "yellow", action: "Discuss at next PCP", created: Date.now() },
-        { title: "Mom — IVIg infusion (every 3 weeks)", who: "mom", responsible: "Marla", urgency: "green", action: "Recurring — FlowMed", created: Date.now() },
-        { title: "Dad — Ortho (Gorman) next: Jul 9", who: "dad", responsible: "Isabel", urgency: "green", action: "Scheduled", created: Date.now() },
-        { title: "Mom — Neuro (Carbunar) next: Jul 29", who: "mom", responsible: "Nini", urgency: "green", action: "Scheduled", created: Date.now() },
-    ];
-    tasks.forEach(t => db.ref('tasks').push(t));
-    db.ref('seeded').set(true);
+function renderDoctorCard(d) {
+    const days = d.nextVisit ? daysUntil(d.nextVisit) : null;
+    const cls = days !== null && days < 0 ? 'overdue' : days !== null && days <= 14 ? 'upcoming' : '';
+    return `<div class="doctor-card ${cls}">
+        <div class="doc-name">Dr. ${d.doctor}</div>
+        <div class="doc-meta">${d.specialty || ''} ${d.facility || ''} ${d.frequency || ''}</div>
+        <div class="doc-dates">
+            <span><span class="label">Last Visit</span><span class="value">${d.lastVisit || '—'}</span></span>
+            <span><span class="label">Next Visit</span><span class="value">${d.nextVisit || '—'}</span></span>
+        </div>
+        ${d.responsible ? `<div class="doc-owner">${d.responsible}</div>` : ''}
+    </div>`;
+}
+
+function daysUntil(dateStr) {
+    if (!dateStr) return null;
+    const target = new Date(dateStr + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    return Math.round((target - today) / 86400000);
+}
+
+// Render agent updates feed
+function renderUpdates(snapshot) {
+    const updates = [];
+    snapshot.forEach(child => updates.push({ id: child.key, ...child.val() }));
+    updates.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+    document.getElementById('s-updates').textContent = updates.length;
+    document.getElementById('feed-count').textContent = updates.length;
+
+    // Full feed
+    document.getElementById('feed-list').innerHTML = updates.length ?
+        updates.slice(0, 50).map(u => {
+            const typeClass = (u.type || '').includes('attended') ? 'attended' :
+                (u.type || '').includes('scheduled') ? 'scheduled' :
+                (u.type || '').includes('rescheduled') ? 'rescheduled' :
+                (u.type || '').includes('health') ? 'health' : 'general';
+            const time = u.timestamp ? timeAgo(new Date(u.timestamp).getTime()) : '';
+            return `<div class="update-item">
+                <span class="update-type ${typeClass}">${(u.type || 'update').replace(/_/g, ' ')}</span>
+                <div class="update-summary">${u.summary || u.raw?.summary_es || 'Update recorded'}</div>
+                <div class="update-meta">${u.sender || ''} ${u.doctor ? '• Dr. ' + u.doctor : ''} ${u.parent ? '• ' + u.parent : ''} • ${time}</div>
+            </div>`;
+        }).join('') :
+        '<div class="empty-state">No agent updates yet. Send messages to the WhatsApp group and they\'ll appear here.</div>';
+
+    // Recent updates for overview (top 5)
+    document.getElementById('recent-updates').innerHTML = updates.length ?
+        updates.slice(0, 5).map(u => {
+            const time = u.timestamp ? timeAgo(new Date(u.timestamp).getTime()) : '';
+            return `<div class="update-item">
+                <div class="update-summary">${u.summary || u.raw?.summary_es || 'Update recorded'}</div>
+                <div class="update-meta">${u.sender || ''} ${u.doctor ? '• Dr. ' + u.doctor : ''} • ${time}</div>
+            </div>`;
+        }).join('') :
+        '<div class="empty-state">No agent activity yet</div>';
 }
 
 // Render tasks
 function renderTasks(snapshot) {
     const list = document.getElementById('task-list');
     let html = '';
-    let overdue = 0, upcoming = 0, done = 0;
+    let done = 0;
     const tasks = [];
+    snapshot.forEach(child => tasks.push({ id: child.key, ...child.val() }));
 
-    snapshot.forEach(child => {
-        tasks.push({ id: child.key, ...child.val() });
-    });
-
-    // Sort: red first, then yellow, then green, then done
     const order = { red: 0, yellow: 1, green: 2, grey: 3 };
     tasks.sort((a, b) => (order[a.urgency] || 3) - (order[b.urgency] || 3));
 
     tasks.forEach(t => {
-        if (t.done) { done++; }
-        else if (t.urgency === 'red') overdue++;
-        else if (t.urgency === 'yellow') upcoming++;
-
-        // Filter by tab
-        if (currentTab === 'mine' && t.responsible !== currentUser && t.claimedBy !== currentUser) return;
-        if (currentTab === 'mine' && t.done) return;
+        if (t.done) done++;
+        if (currentTab === 'mine' && t.responsible !== currentUser) return;
         if (currentTab === 'overdue' && t.urgency !== 'red') return;
         if (currentTab === 'mom' && t.who !== 'mom' && t.who !== 'both') return;
         if (currentTab === 'dad' && t.who !== 'dad' && t.who !== 'both') return;
-        if (currentTab === 'done' && !t.done) return;
-        if (currentTab !== 'done' && currentTab !== 'mine' && t.done) return;
+        if (t.done) return;
 
         const whoTag = `<span class="tag ${t.who}">${t.who === 'both' ? 'Both' : t.who === 'mom' ? 'Mom' : 'Dad'}</span>`;
         const ownerTag = t.responsible ? `<span class="tag owner">${t.responsible}</span>` : '';
-        const claimedHtml = t.claimedBy ? `<span class="claimed">✓ ${t.claimedBy}</span>` :
-            `<button class="btn btn-claim" onclick="claim('${t.id}')">I'll handle</button>`;
-        const doneBtn = t.done ? '' : `<button class="btn btn-done" onclick="markDone('${t.id}')">Done</button>`;
-        const textBtn = t.done ? '' : `<button class="btn btn-text" onclick="openTextModal('${t.title.replace(/'/g, "\\'")}')">📲 Text</button>`;
+        const doneBtn = `<button class="btn btn-done" onclick="markDone('${t.id}')">Done</button>`;
 
-        html += `<div class="task ${t.done ? 'completed' : ''}">
-            <div class="dot ${t.done ? 'grey' : t.urgency}"></div>
+        html += `<div class="task">
+            <div class="dot ${t.urgency || 'grey'}"></div>
             <div class="task-body">
                 <div class="task-title">${t.title}</div>
                 <div class="task-meta">${t.action || ''}</div>
                 <div class="task-tags">${whoTag}${ownerTag}</div>
             </div>
-            <div class="task-actions">${claimedHtml}${doneBtn}${textBtn}</div>
+            <div class="task-actions">${doneBtn}</div>
         </div>`;
     });
 
-    list.innerHTML = html || '<div style="padding:20px;text-align:center;color:#94a3b8;">No items in this view</div>';
-    document.getElementById('s-overdue').textContent = overdue;
-    document.getElementById('s-upcoming').textContent = upcoming;
     document.getElementById('s-done').textContent = done;
-}
-
-// Actions
-function claim(id) {
-    db.ref(`tasks/${id}/claimedBy`).set(currentUser);
-    addActivity(`${currentUser} claimed a task`);
+    list.innerHTML = html || '<div class="empty-state">No items in this view</div>';
 }
 
 function markDone(id) {
     db.ref(`tasks/${id}`).update({ done: true, doneBy: currentUser, doneAt: Date.now(), urgency: 'grey' });
-    addActivity(`${currentUser} marked a task done`);
 }
 
 function addTask() {
     const input = document.getElementById('new-task');
     const who = document.getElementById('new-who').value;
     if (!input.value.trim()) return;
-    db.ref('tasks').push({
-        title: input.value.trim(),
-        who: who,
-        responsible: currentUser,
-        urgency: 'yellow',
-        action: '',
-        created: Date.now(),
-        done: false
-    });
-    addActivity(`${currentUser} added: ${input.value.trim()}`);
+    db.ref('tasks').push({ title: input.value.trim(), who, responsible: currentUser, urgency: 'yellow', action: '', created: Date.now(), done: false });
     input.value = '';
-}
-
-function addActivity(text) {
-    db.ref('activity').push({ text, time: Date.now(), user: currentUser });
-}
-
-// Render activity
-function renderActivity(snapshot) {
-    const list = document.getElementById('activity-list');
-    const items = [];
-    snapshot.forEach(child => items.push(child.val()));
-    items.sort((a, b) => b.time - a.time);
-    const recent = items.slice(0, 10);
-    document.getElementById('activity-count').textContent = recent.length;
-    list.innerHTML = recent.map(a => {
-        const ago = timeAgo(a.time);
-        return `<div class="activity"><strong>${a.user}</strong> ${a.text.replace(a.user + ' ', '')} <span class="time">${ago}</span></div>`;
-    }).join('');
 }
 
 function timeAgo(ts) {
@@ -357,29 +385,20 @@ function timeAgo(ts) {
 // Tabs
 document.getElementById('tabs').addEventListener('click', e => {
     if (e.target.classList.contains('tab')) {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('#tabs .tab').forEach(t => t.classList.remove('active'));
         e.target.classList.add('active');
         currentTab = e.target.dataset.tab;
         db.ref('tasks').once('value').then(renderTasks);
     }
 });
 
-// Enter key
 document.getElementById('new-task').addEventListener('keypress', e => { if (e.key === 'Enter') addTask(); });
-
-// Offline detection
-window.addEventListener('offline', () => document.getElementById('offline').classList.add('show'));
-window.addEventListener('online', () => document.getElementById('offline').classList.remove('show'));
 
 // Initialize
 renderUserBtns();
-
-// Listen for real-time changes
-db.ref('seeded').once('value').then(snap => {
-    if (!snap.val()) seedData();
-});
 db.ref('tasks').on('value', renderTasks);
-db.ref('activity').on('value', renderActivity);
+db.ref('medical/doctors').on('value', renderDoctors);
+db.ref('agent_updates').on('value', renderUpdates);
 </script>
 
 </body>
