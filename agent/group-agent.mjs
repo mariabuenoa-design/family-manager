@@ -171,12 +171,39 @@ async function catchUpMissedMessages() {
 }
 
 // --- Health check: alert if disconnected too long ---
+let alertSent = false;
+
+async function sendDownAlert(downMinutes) {
+  if (alertSent) return; // only alert once per disconnect
+  alertSent = true;
+
+  const mariaNumber = process.env.WHATSAPP_MARIA;
+  if (!mariaNumber || !process.env.TWILIO_ACCOUNT_SID) {
+    console.log('⚠️ Cannot send alert — Twilio or Maria number not configured.');
+    return;
+  }
+
+  try {
+    const twilio = (await import('twilio')).default;
+    const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await twilioClient.messages.create({
+      from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
+      to: `whatsapp:${mariaNumber}`,
+      body: `🚨 Family Agent is DOWN for ${downMinutes.toFixed(0)} min. It couldn't auto-reconnect. You may need to re-scan the QR code on Railway logs.`
+    });
+    console.log('📲 Alert sent to Maria via Twilio WhatsApp.');
+  } catch (err) {
+    console.log(`❌ Failed to send alert: ${err.message}`);
+  }
+}
+
 setInterval(async () => {
   if (!isConnected && disconnectedSince) {
     const downMinutes = (new Date() - disconnectedSince) / (1000 * 60);
     if (downMinutes > 30) {
       console.log(`🚨 ALERT: Agent has been disconnected for ${downMinutes.toFixed(0)} minutes!`);
       await logHealth('prolonged_disconnect');
+      await sendDownAlert(downMinutes);
     }
   }
   // Heartbeat when connected
@@ -199,6 +226,7 @@ client.on('ready', async () => {
   isConnected = true;
   reconnectAttempts = 0;
   disconnectedSince = null;
+  alertSent = false;
   await logHealth('connected');
 
   // Catch up on any missed messages
