@@ -9,25 +9,201 @@ const FAMILY_GROUP_NAME = process.env.WHATSAPP_GROUP_NAME || 'Family Manager';
 
 const FIREBASE_URL = 'https://family-manager-a8aed-default-rtdb.firebaseio.com';
 
+// --- Resilience state ---
+let lastSeenTimestamp = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const RECONNECT_DELAY_BASE = 30000; // 30s, doubles each attempt
+let isConnected = false;
+let disconnectedSince = null;
+
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: './.wwebjs_auth' }),
   puppeteer: {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
-  }
+  },
+  restartOnAuthFail: true
 });
 
 client.on('qr', (qr) => {
   console.log('\n📱 Scan this QR code with WhatsApp on your phone:\n');
   qrcode.generate(qr, { small: true });
-  console.log('\nOr open this URL to scan:\n' + 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qr));
   console.log('\nOpen WhatsApp → Settings → Linked Devices → Link a Device\n');
 });
+
+// --- Resilience: disconnect / reconnect handling ---
+
+client.on('disconnected', async (reason) => {
+  console.log(`❌ Disconnected: ${reason}`);
+  isConnected = false;
+  disconnectedSince = new Date();
+  await saveLastSeen();
+  attemptReconnect();
+});
+
+client.on('auth_failure', (msg) => {
+  console.log(`🔐 Auth failure: ${msg}. Session may need QR re-scan.`);
+  isConnected = false;
+  disconnectedSince = new Date();
+});
+
+async function attemptReconnect() {
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    console.log(`🚨 Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Restarting process...`);
+    await logHealth('max_reconnects_reached');
+    process.exit(1); // Railway will auto-restart the container
+  }
+
+  reconnectAttempts++;
+  const delay = Math.min(RECONNECT_DELAY_BASE * Math.pow(2, reconnectAttempts - 1), 600000); // max 10min
+  console.log(`🔄 Reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${delay / 1000}s...`);
+
+  setTimeout(async () => {
+    try {
+      await client.initialize();
+    } catch (err) {
+      console.log(`❌ Reconnect failed: ${err.message}`);
+      attemptReconnect();
+    }
+  }, delay);
+}
+
+async function saveLastSeen() {
+  try {
+    await fetch(`${FIREBASE_URL}/agent_health.json`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lastSeen: lastSeenTimestamp || new Date().toISOString(),
+        lastDisconnect: new Date().toISOString(),
+        status: 'disconnected'
+      })
+    });
+  } catch (e) { console.log('Failed to save health:', e.message); }
+}
+
+async function loadLastSeen() {
+  try {
+    const res = await fetch(`${FIREBASE_URL}/agent_health.json`);
+    const data = await res.json();
+    if (data && data.lastSeen) {
+      lastSeenTimestamp = data.lastSeen;
+      console.log(`   Last seen timestamp loaded: ${lastSeenTimestamp}`);
+    }
+  } catch (e) { console.log('No previous lastSeen found, starting fresh.'); }
+}
+
+async function logHealth(event) {
+  try {
+    await fetch(`${FIREBASE_URL}/agent_health.json`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lastEvent: event,
+        lastEventTime: new Date().toISOString(),
+        status: isConnected ? 'connected' : 'disconnected',
+        reconnectAttempts
+      })
+    });
+  } catch (e) { /* silent */ }
+}
+
+async function catchUpMissedMessages() {
+  if (!lastSeenTimestamp) {
+    console.log('   No lastSeen timestamp — skipping catch-up.');
+    return;
+  }
+
+  const lastSeenDate = new Date(lastSeenTimestamp);
+  const now = new Date();
+  const hoursMissed = (now - lastSeenDate) / (1000 * 60 * 60);
+
+  if (hoursMissed < 0.05) { // less than 3 minutes
+    console.log('   Downtime < 3 min — no catch-up needed.');
+    return;
+  }
+
+  console.log(`   ⏰ Catching up on ${hoursMissed.toFixed(1)} hours of missed messages...`);
+
+  try {
+    const chats = await client.getChats();
+    const group = chats.find(c => c.isGroup && c.name.toLowerCase().includes(FAMILY_GROUP_NAME.toLowerCase()));
+    if (!group) {
+      console.log('   ⚠️ Could not find group for catch-up.');
+      return;
+    }
+
+    const messages = await group.fetchMessages({ limit: 50 });
+    const missed = messages.filter(m => {
+      const msgTime = new Date(m.timestamp * 1000);
+      return msgTime > lastSeenDate && !m.fromMe;
+    });
+
+    if (missed.length === 0) {
+      console.log('   ✅ No missed messages to process.');
+      return;
+    }
+
+    console.log(`   📨 Processing ${missed.length} missed message(s)...`);
+
+    for (const msg of missed) {
+      const body = msg.body?.trim();
+      if (!body || body.length <= 5) continue;
+
+      const contact = await msg.getContact();
+      const sender = contact.pushname || contact.name || msg.from;
+
+      console.log(`   [catch-up] ${sender}: ${body.substring(0, 60)}...`);
+
+      const parsed = await parseMessage(body, sender);
+      if (parsed.actionable) {
+        await handleAIUpdate(parsed, sender, null); // null chat = don't reply in group for old messages
+        console.log(`   ✅ Caught up: ${parsed.summary_en || parsed.type}`);
+      }
+    }
+
+    console.log(`   ✅ Catch-up complete.`);
+  } catch (err) {
+    console.log(`   ❌ Catch-up error: ${err.message}`);
+  }
+}
+
+// --- Health check: alert if disconnected too long ---
+setInterval(async () => {
+  if (!isConnected && disconnectedSince) {
+    const downMinutes = (new Date() - disconnectedSince) / (1000 * 60);
+    if (downMinutes > 30) {
+      console.log(`🚨 ALERT: Agent has been disconnected for ${downMinutes.toFixed(0)} minutes!`);
+      await logHealth('prolonged_disconnect');
+    }
+  }
+  // Heartbeat when connected
+  if (isConnected) {
+    lastSeenTimestamp = new Date().toISOString();
+    await fetch(`${FIREBASE_URL}/agent_health.json`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lastSeen: lastSeenTimestamp, status: 'connected' })
+    }).catch(() => {});
+  }
+}, 5 * 60 * 1000); // every 5 minutes
+
+// --- Ready handler ---
 
 client.on('ready', async () => {
   console.log('✅ Family Care Agent is connected to WhatsApp!');
   console.log(`   Listening for messages in group: "${FAMILY_GROUP_NAME}"`);
+
+  isConnected = true;
+  reconnectAttempts = 0;
+  disconnectedSince = null;
+  await logHealth('connected');
+
+  // Catch up on any missed messages
+  await catchUpMissedMessages();
+  lastSeenTimestamp = new Date().toISOString();
 
   // Send instructions to the group on startup if flag is set
   if (process.env.SEND_INSTRUCTIONS === 'true') {
@@ -57,6 +233,9 @@ client.on('ready', async () => {
 });
 
 client.on('message_create', async (msg) => {
+  // Update last seen on every message
+  lastSeenTimestamp = new Date().toISOString();
+
   const chat = await msg.getChat();
 
   // Only process messages from the family group
@@ -73,8 +252,15 @@ client.on('message_create', async (msg) => {
     if (!overlap) return;
   }
 
-  // Ignore ALL messages from the agent itself (prevent loops)
-  if (msg.fromMe) return;
+  // Ignore messages from the agent itself (prevent loops)
+  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('📋')) return;
+  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('✅')) return;
+  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('🚨')) return;
+  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('📅')) return;
+  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('🤖')) return;
+  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('⚠️')) return;
+  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('❌')) return;
+  if (msg.fromMe && msg.type === 'chat' && msg.body.startsWith('📲')) return;
 
   const contact = await msg.getContact();
   const sender = contact.pushname || contact.name || msg.from;
@@ -86,7 +272,7 @@ client.on('message_create', async (msg) => {
   console.log(`[${chat.name}] ${sender}: ${msg.body}`);
 
   // Command: status / update / how are we doing
-  if (body === '/status' || body === 'status' || body.includes('how are we doing') || body.includes('resumen') || body.includes('summary') || body.includes('como vamos') || body.includes('como estamos')) {
+  if (body === '/status' || body === 'status' || body.includes('how are we doing')) {
     const digest = await buildDigest();
     await chat.sendMessage(digest);
     return;
@@ -122,45 +308,6 @@ client.on('message_create', async (msg) => {
     return;
   }
 
-  // Command: catchup - process last 2 weeks of messages from the group
-  if (body === '/catchup' || body === 'catchup') {
-    await chat.sendMessage('Processing last 2 weeks of messages... This may take a minute.');
-    try {
-      const messages = await chat.fetchMessages({ limit: 200 });
-      const twoWeeksAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
-      const recentMsgs = messages.filter(m => m.timestamp * 1000 > twoWeeksAgo && m.body && m.body.length > 5 && !m.fromMe);
-      
-      let processed = 0;
-      let actionable = 0;
-      
-      for (const m of recentMsgs) {
-        const contact = await m.getContact();
-        const senderName = contact.pushname || contact.name || 'Unknown';
-        const parsed = await parseMessage(m.body, senderName);
-        if (parsed.actionable) {
-          await writeFirebase('agent_updates', {
-            ...parsed,
-            sender: senderName,
-            originalMessage: m.body,
-            timestamp: new Date(m.timestamp * 1000).toISOString(),
-            source: 'catchup'
-          });
-          actionable++;
-        }
-        processed++;
-        // Small delay to avoid rate limits
-        await new Promise(r => setTimeout(r, 500));
-      }
-      
-      await chat.sendMessage('Catchup complete! Processed ' + processed + ' messages, found ' + actionable + ' actionable updates.');
-    } catch (err) {
-      console.error('Catchup error:', err.message);
-      await chat.sendMessage('Error during catchup: ' + err.message);
-    }
-    return;
-  }
-
-
   // Command: update — parse natural language input
   if (body.startsWith('update ') || body.startsWith('/update ')) {
     const info = msg.body.replace(/^\/?(update)\s+/i, '');
@@ -185,15 +332,11 @@ client.on('message_create', async (msg) => {
 
   // AI-powered natural language parsing — understands Spanish and English
   if (msg.body.length > 5) {
-    console.log('  Sending to AI parser...');
     const parsed = await parseMessage(msg.body, sender);
-    console.log('  AI result:', JSON.stringify(parsed));
     if (parsed.actionable) {
       await handleAIUpdate(parsed, sender, chat);
-    } else {
-      console.log('  Not actionable, no reply sent');
+      return;
     }
-    return;
   }
 });
 
@@ -356,63 +499,65 @@ async function sendParentReminder(parent, message, sender, chat) {
 }
 
 async function handleAIUpdate(parsed, sender, chat) {
-  console.log('  AI parsed:', JSON.stringify(parsed, null, 2));
+  console.log(`  🧠 AI parsed:`, JSON.stringify(parsed, null, 2));
 
-  // Always reply first so the group sees confirmation
-  try {
-    if (parsed.summary_es) {
-      await chat.sendMessage(parsed.summary_es);
-      console.log('  Reply sent to group');
-    }
-  } catch (replyErr) {
-    console.error('  Failed to send reply:', replyErr.message);
-  }
+  // Update Firebase based on type
+  if (parsed.doctor && (parsed.type === 'appointment_attended' || parsed.type === 'appointment_scheduled' || parsed.type === 'appointment_rescheduled')) {
+    // Find and update the doctor record
+    const res = await fetch(`${FIREBASE_URL}/medical/doctors.json`);
+    const doctors = await res.json();
 
-  // Then try to update Firebase
-  try {
-    if (parsed.doctor && (parsed.type === 'appointment_attended' || parsed.type === 'appointment_scheduled' || parsed.type === 'appointment_rescheduled')) {
-      const res = await fetch(`${FIREBASE_URL}/medical/doctors.json`);
-      const doctors = await res.json();
-      if (doctors) {
-        for (const [key, doc] of Object.entries(doctors)) {
-          if (doc.doctor && doc.doctor.toLowerCase() === parsed.doctor.toLowerCase()) {
-            const updates = {};
-            if (parsed.type === 'appointment_attended') {
-              updates.lastVisit = parsed.date || new Date().toISOString().split('T')[0];
-              updates.lastVisitNote = 'Attended - confirmed by ' + sender;
-              if (parsed.next_visit_date) updates.nextVisit = parsed.next_visit_date;
-            } else {
-              if (parsed.next_visit_date || parsed.date) updates.nextVisit = parsed.next_visit_date || parsed.date;
+    if (doctors) {
+      for (const [key, doc] of Object.entries(doctors)) {
+        if (doc.doctor && doc.doctor.toLowerCase() === parsed.doctor.toLowerCase()) {
+          const updates = {};
+
+          if (parsed.type === 'appointment_attended') {
+            updates.lastVisit = parsed.date || new Date().toISOString().split('T')[0];
+            updates.lastVisitNote = `Attended - confirmed by ${sender}`;
+            if (parsed.next_visit_date) {
+              updates.nextVisit = parsed.next_visit_date;
             }
-            if (Object.keys(updates).length > 0) {
-              await fetch(`${FIREBASE_URL}/medical/doctors/${key}.json`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updates)
-              });
+          } else if (parsed.type === 'appointment_scheduled' || parsed.type === 'appointment_rescheduled') {
+            if (parsed.next_visit_date || parsed.date) {
+              updates.nextVisit = parsed.next_visit_date || parsed.date;
             }
-            break;
           }
+
+          if (Object.keys(updates).length > 0) {
+            await fetch(`${FIREBASE_URL}/medical/doctors/${key}.json`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updates)
+            });
+          }
+          break;
         }
       }
     }
-    await writeFirebase('agent_updates', {
-      type: parsed.type,
-      parent: parsed.parent,
-      doctor: parsed.doctor,
-      date: parsed.date,
-      sender: sender,
-      summary: parsed.summary_en,
-      timestamp: new Date().toISOString(),
-      raw: parsed
-    });
-  } catch (fbErr) {
-    console.error('  Firebase error (non-fatal):', fbErr.message);
+  }
+
+  // Log the update
+  await writeFirebase('agent_updates', {
+    type: parsed.type,
+    parent: parsed.parent,
+    doctor: parsed.doctor,
+    date: parsed.date,
+    sender: sender,
+    summary: parsed.summary_en,
+    timestamp: new Date().toISOString(),
+    raw: parsed
+  });
+
+  // Respond in the group in Spanish (skip if catch-up mode)
+  if (parsed.summary_es && chat) {
+    await chat.sendMessage(`✅ ${parsed.summary_es}`);
   }
 }
 
-
 // Start the agent
 console.log('🚀 Starting Family Care Agent...');
+console.log('   Loading last session state...');
+await loadLastSeen();
 console.log('   Waiting for QR code...\n');
 client.initialize();
