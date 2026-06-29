@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Family Agent - QR Scan</title>
+<style>
+body { font-family: Arial, sans-serif; text-align: center; padding: 40px 20px; background: #f5f5f5; }
+h1 { color: #232f3e; }
+#qr-container { margin: 30px auto; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: inline-block; }
+#status { margin: 20px 0; font-size: 14px; color: #666; }
+.connected { color: #0a8a0a !important; font-weight: bold; }
+.waiting { color: #cc6600 !important; }
+canvas { display: block; margin: 0 auto; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+</head>
+<body>
+<h1>Family Agent - WhatsApp QR</h1>
+<p>Scan this with your phone: WhatsApp → Settings → Linked Devices → Link a Device</p>
+<div id="qr-container">
+  <canvas id="qr-canvas"></canvas>
+  <p id="status">Loading...</p>
+</div>
+
+<script>
+const FIREBASE_URL = 'https://family-manager-a8aed-default-rtdb.firebaseio.com/agent_health.json';
+
+async function loadQR() {
+  try {
+    const res = await fetch(FIREBASE_URL);
+    const data = await res.json();
+    const statusEl = document.getElementById('status');
+
+    if (!data) {
+      statusEl.textContent = 'No agent data found. Wait for Railway to deploy.';
+      return;
+    }
+
+    if (data.status === 'connected') {
+      statusEl.className = 'connected';
+      statusEl.textContent = '✅ Agent is already connected! No QR needed.';
+      document.getElementById('qr-canvas').style.display = 'none';
+      return;
+    }
+
+    if (!data.qrCode) {
+      statusEl.className = 'waiting';
+      statusEl.textContent = 'Waiting for QR code... Refresh in a moment.';
+      return;
+    }
+
+    statusEl.className = 'waiting';
+    statusEl.textContent = 'QR generated at: ' + new Date(data.qrTimestamp).toLocaleString() + ' — Scan now!';
+
+    QRCode.toCanvas(document.getElementById('qr-canvas'), data.qrCode, {
+      width: 300,
+      margin: 2
+    });
+  } catch (e) {
+    document.getElementById('status').textContent = 'Error loading: ' + e.message;
+  }
+}
+
+loadQR();
+setInterval(loadQR, 10000); // refresh every 10s
+</script>
+</body>
+</html>
