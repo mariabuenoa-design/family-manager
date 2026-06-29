@@ -151,7 +151,7 @@ async function catchUpMissedMessages() {
       return;
     }
 
-    const messages = await group.fetchMessages({ limit: 50 });
+    const messages = await group.fetchMessages({ limit: 200 });
     const missed = messages.filter(m => {
       const msgTime = new Date(m.timestamp * 1000);
       return msgTime > lastSeenDate && !m.fromMe;
