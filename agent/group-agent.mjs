@@ -30,7 +30,11 @@ const client = new Client({
 client.on('qr', (qr) => {
   console.log('\n📱 Scan this QR code with WhatsApp on your phone:\n');
   qrcode.generate(qr, { small: true });
-  console.log('\nOpen WhatsApp → Settings → Linked Devices → Link a Device\n');
+  // Also generate a scannable image URL
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
+  console.log('\n📲 Can\'t scan above? Open this link on another device and scan from your phone:');
+  console.log(`   ${qrImageUrl}\n`);
+  console.log('Open WhatsApp → Settings → Linked Devices → Link a Device\n');
 });
 
 // --- Resilience: disconnect / reconnect handling ---
