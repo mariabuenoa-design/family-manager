@@ -27,13 +27,25 @@ const client = new Client({
   restartOnAuthFail: true
 });
 
-client.on('qr', (qr) => {
+client.on('qr', async (qr) => {
   console.log('\n📱 Scan this QR code with WhatsApp on your phone:\n');
   qrcode.generate(qr, { small: true });
-  // Also generate a scannable image URL
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
-  console.log('\n📲 Can\'t scan above? Open this link on another device and scan from your phone:');
-  console.log(`   ${qrImageUrl}\n`);
+  // Save QR data to Firebase so it can be viewed from a browser
+  try {
+    await fetch(`${FIREBASE_URL}/agent_health.json`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        qrCode: qr,
+        qrTimestamp: new Date().toISOString(),
+        status: 'waiting_for_qr'
+      })
+    });
+    console.log('\n📲 QR saved! Open this page on your computer to scan:');
+    console.log('   https://family-manager-rouge.vercel.app/qr.html\n');
+  } catch (e) {
+    console.log('   (Could not save QR to Firebase)');
+  }
   console.log('Open WhatsApp → Settings → Linked Devices → Link a Device\n');
 });
 
